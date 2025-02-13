@@ -25,12 +25,12 @@ PCF8574 PCF3(0x22);
 PCF8574 PCF4(0x23);
 PCF8574 PCF5(0x24);
 
-Encoder Mechanical_ENC1(PCNT_UNIT_0, Mechanical_ENC1_A, Mechanical_ENC1_B);
-Encoder Mechanical_ENC2(PCNT_UNIT_1, Mechanical_ENC2_A, Mechanical_ENC2_B);
-Encoder DayScope_ENC1(PCNT_UNIT_2, DayScope_ENC1_A, DayScope_ENC1_B);
+Encoder Mechanical_ENC1(PCNT_UNIT_1, Mechanical_ENC1_A, Mechanical_ENC1_B);
+Encoder Mechanical_ENC2(PCNT_UNIT_0, Mechanical_ENC2_A, Mechanical_ENC2_B);
+Encoder DayScope_ENC1(PCNT_UNIT_3, DayScope_ENC1_A, DayScope_ENC1_B);
 // Encoder DayScope_ENC2(PCNT_UNIT_3, DayScope_ENC2_A, DayScope_ENC2_B);
 // Encoder DayScope_ENC3(PCNT_UNIT_1, DayScope_ENC3_A, DayScope_ENC3_B);
-Encoder NightScope_ENC1(PCNT_UNIT_3, NightScope_ENC1_A, NightScope_ENC1_B);
+Encoder NightScope_ENC1(PCNT_UNIT_2, NightScope_ENC1_A, NightScope_ENC1_B);
 
 bool encoderFlag = false;
 bool previousEncoderFlag = encoderFlag; // Store the previous state
@@ -143,9 +143,9 @@ void loop() {
   // Shift and store into a single 32-bit variable
   buttons = 0; // Ensure buttons starts empty
 
-  buttons |= Temp_DayNight;               // Bits 0-7 (8 bits)
-  buttons |= (Temp_SmokeGernade_1 << 8);  // Bits 8-9 (2 bits)
-  buttons |= (Temp_SmokeGernade_2 << 10); // Bits 10-17 (8 bits)
+  buttons |= Temp_DayNight;                               // Bits 0-7 (8 bits)
+  buttons |= (Temp_SmokeGernade_1 << 8);                  // Bits 8-9 (2 bits)
+  buttons |= (((Temp_SmokeGernade_2 >> 6) & 0x03) << 10); // Bits 10-17 (8 bits)
   buttons |=
       ((Temp_Mechanical >> 1)
        << 18); // Bits 18-24 (shift right to remove bit 0, keeping 7 bits)
