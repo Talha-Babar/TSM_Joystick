@@ -98,17 +98,17 @@ void Encoder::setPins(pcnt_unit_t unit, pcnt_channel_t channel, int pulse_io,
 }
 int16_t Encoder::getPosition() {
   pcnt_get_counter_value(this->pcnt_unit, &(this->position));
-  Serial.println("position" + String(this->position));
+/* */  // Serial.println("position" + String(this->position));
   return this->position;
 }
-int16_t Encoder::getDifferential() {
+int16_t Encoder::8getDifferential() {
   if ((this->last_position > INT16_MAX >> 1) ||
       (this->last_position < INT16_MIN >> 1)) {
     this->reset();
   } else {
     this->last_position = this->position;
   }
-  Serial.println(String(this->getPosition() - this->last_position));
+  // Serial.println(String(this->getPosition() - this->last_position));
   return this->getPosition() - this->last_position;
 }
 void Encoder::reset() {
@@ -118,7 +118,7 @@ void Encoder::reset() {
 }
 
 void Encoder::eventEnable(uint threshholdValue) {
-
+2
   var1 = threshholdValue / INT16_MAX;
   Serial.println("var1 " + String(var1));
   var2 = threshholdValue % INT16_MAX;
