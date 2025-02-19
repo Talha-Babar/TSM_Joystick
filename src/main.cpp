@@ -1,8 +1,9 @@
+#include "AiEsp32RotaryEncoder.h"
 #include "GamepadDevice.h"
 #include "PCF8574.h"
 #include "USB.h"
 #include "USBHID.h"
-#include "encoder.h"
+#include "pcntEncoder.h"
 #include <EspStepper.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
@@ -25,12 +26,16 @@ PCF8574 PCF3(0x22);
 PCF8574 PCF4(0x23);
 PCF8574 PCF5(0x24);
 
-Encoder Mechanical_ENC1(PCNT_UNIT_1, Mechanical_ENC1_A, Mechanical_ENC1_B);
-Encoder Mechanical_ENC2(PCNT_UNIT_0, Mechanical_ENC2_A, Mechanical_ENC2_B);
-// Encoder DayScope_ENC2(PCNT_UNIT_3, DayScope_ENC1_A, DayScope_ENC1_B);
-Encoder DayScope_ENC1(PCNT_UNIT_3, DayScope_ENC2_A, DayScope_ENC2_B);
-// Encoder DayScope_ENC3(PCNT_UNIT_1, DayScope_ENC3_A, DayScope_ENC3_B);
-Encoder NightScope_ENC1(PCNT_UNIT_2, NightScope_ENC1_A, NightScope_ENC1_B);
+pcntEncoder Mechanical_ENC1(PCNT_UNIT_1, Mechanical_ENC1_A, Mechanical_ENC1_B);
+pcntEncoder Mechanical_ENC2(PCNT_UNIT_0, Mechanical_ENC2_A, Mechanical_ENC2_B);
+// pcntEncoder DayScope_ENC2(PCNT_UNIT_3, DayScope_ENC1_A, DayScope_ENC1_B);
+pcntEncoder DayScope_ENC1(PCNT_UNIT_3, DayScope_ENC2_A, DayScope_ENC2_B);
+// pcntEncoder DayScope_ENC3(PCNT_UNIT_1, DayScope_ENC3_A, DayScope_ENC3_B);
+pcntEncoder NightScope_ENC1(PCNT_UNIT_2, NightScope_ENC1_A, NightScope_ENC1_B);
+
+AiEsp32RotaryEncoder rotaryEncoder =
+    AiEsp32RotaryEncoder(DayScope_ENC1_A, DayScope_ENC1_B, -1, -1,
+                         AIESP32ROTARYENCODER_DEFAULT_STEPS, false);
 
 bool encoderFlag = false;
 bool previousEncoderFlag = encoderFlag; // Store the previous state
@@ -41,9 +46,20 @@ void motorControlTask(void *pvParameters);
 void setup_wifi();
 void callback(char *topic, byte *message, unsigned int length);
 
+void IRAM_ATTR readEncoderISR() { rotaryEncoder.readEncoder_ISR(); }
+
 void setup() {
   Serial.begin(115200);
   Wire.begin(SDA, SCL);
+
+  rotaryEncoder.areEncoderPinsPulldownforEsp32 = false;
+  rotaryEncoder.begin();
+  rotaryEncoder.setup(readEncoderISR);
+  rotaryEncoder.setBoundaries(
+      -999999, 999999,
+      false); // minValue, maxValue, circleValues true|false
+              // (when max go to min and vice versa)
+  rotaryEncoder.setAcceleration(1);
 
   pinMode(YAW_PIN, INPUT);
   pinMode(PITCH_PIN, INPUT);
@@ -53,12 +69,13 @@ void setup() {
   PCF3.begin();
   PCF4.begin();
   PCF5.begin();
-
   dwinController.begin();
+
+  dwinController.setNeedlePosition(800);
   stepper.begin();
-  setup_wifi();
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
+  // setup_wifi();
+  // client.setServer(mqtt_server, mqtt_port);
+  // client.setCallback(callback);
   vTaskDelay(1000);
 
   Mechanical_ENC1.begin();
@@ -70,7 +87,6 @@ void setup() {
 
   dwinController.setNeedlePosition(550);
   stepper.setRPMbyAcceleration(10);
-  vTaskDelay(10000);
 
   xTaskCreatePinnedToCore(motorControlTask, "MotorControl", 4096, NULL, 1, NULL,
                           1);
@@ -81,10 +97,10 @@ void setup() {
 
 void loop() {
 
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
+  // if (!client.connected()) {
+  //   reconnect();
+  // }
+  // client.loop();
   dwinController.setNeedlePosition(TSM_Aux_value);
 
   if (digitalRead(Pin_ALA)) {
@@ -128,11 +144,11 @@ void loop() {
   uint8_t Temp_Mechanical = 0;
   uint8_t Temp_Electrical = 0;
   // Read GPIO values from the IO expanders and invert bits
-  Temp_DayNight = ~PCF1.readGPIO();
-  Temp_SmokeGernade_1 = ~PCF2.readGPIO();
-  Temp_SmokeGernade_2 = ~PCF3.readGPIO();
-  Temp_Mechanical = ~PCF4.readGPIO();
-  Temp_Electrical = ~PCF5.readGPIO();
+  // Temp_DayNight = ~PCF1.readGPIO();
+  // Temp_SmokeGernade_1 = ~PCF2.readGPIO();
+  // Temp_SmokeGernade_2 = ~PCF3.readGPIO();
+  // Temp_Mechanical = ~PCF4.readGPIO();
+  // Temp_Electrical = ~PCF5.readGPIO();
 
   if (debug) {
     Serial.print("Temp_Mechanical: ");
@@ -150,13 +166,12 @@ void loop() {
   // Shift and store into a single 32-bit variable
   buttons = 0; // Ensure buttons starts empty
 
-  buttons |= Temp_DayNight;                               // Bits 0-7 (8 bits)
-  buttons |= (Temp_SmokeGernade_1 << 8);                  // Bits 8-9 (2 bits)
-  buttons |= ((Temp_SmokeGernade_2 ) << 10); // Bits 10-17 (8 bits)
+  buttons |= Temp_DayNight;                 // Bits 0-7 (8 bits)
+  buttons |= (Temp_SmokeGernade_1 << 8);    // Bits 8-9 (2 bits)
+  buttons |= ((Temp_SmokeGernade_2) << 10); // Bits 10-17 (8 bits)
+  buttons |= ((Temp_Mechanical >> 1) << 18);
   buttons |=
-      ((Temp_Mechanical >> 1)
-       << 18); 
-       buttons |= (((Temp_Electrical & 0x0F) | ((Temp_Electrical & 0xF0) >> 1)) << 25);
+      (((Temp_Electrical & 0x0F) | ((Temp_Electrical & 0xF0) >> 1)) << 25);
 
   // Debugging Output
   if (debug) {
@@ -170,17 +185,29 @@ void loop() {
   int8_t DayScope_1 = DayScope_ENC1.getDifferential();
   int8_t NightScope = NightScope_ENC1.getDifferential();
 
-  if (1) {
+  if (debug) {
     Serial.print("Mechanical_1: ");
     Serial.println(Mechanical_1);
-    Serial.print("NightScope: ");
-    Serial.println(NightScope);
+    // Serial.print("NightScope: ");
+    // Serial.println(NightScope);
   }
 
+  // if (rotaryEncoder.encoderChanged()) {
+  //   Serial.println(rotaryEncoder.readEncoder());
+  // }
+  static int lastPosition;
+  int currentPosition = (rotaryEncoder.readEncoder());
+  uint8_t differential = currentPosition - lastPosition; // Calculate difference
+  lastPosition = currentPosition;
+
+  if (debug) {
+    Serial.print("Differential: ");
+    Serial.println(differential);
+  }
 
   // Send data to gamepad
   if (!Gamepad.send(Yaw_value, Pitch_value, Mechanical_1, Mechanical_2,
-                    DayScope_1, NightScope, 0, buttons)) {
+                    DayScope_1, differential, 0, buttons)) {
     Serial.println("Failed to send gamepad report.");
   }
 

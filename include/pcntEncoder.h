@@ -1,5 +1,5 @@
-#ifndef ENCODER_H
-#define ENCODER_H
+#ifndef PCNT_ENCODER_H
+#define PCNT_ENCODER_H
 
 #include <Arduino.h>
 #include <driver/pcnt.h>
@@ -12,7 +12,7 @@ volatile int16_t highInterruptCount = 0;
 volatile int16_t lowInterruptCount = 0;
 uint32_t intrStatus;
 
-class Encoder {
+class pcntEncoder {
 private:
   pcnt_unit_t pcnt_unit; // PCNT unit for this encoder
   int16_t position;      // Current position count
@@ -58,7 +58,7 @@ private:
   }
 
 public:
-  Encoder(pcnt_unit_t unit, int pinA, int pinB = PIN_NOT_USED)
+  pcntEncoder(pcnt_unit_t unit, int pinA, int pinB = PIN_NOT_USED)
       : pcnt_unit(unit), pin_a(pinA), pin_b(pinB), position(0),
         last_position(0), quadrature(pinB != PIN_NOT_USED) {}
   void begin();
@@ -66,7 +66,7 @@ public:
   int16_t getPosition();
   // Get differential output (change in position)
   int16_t getDifferential();
-  // Reset the encoder position to zero
+  // Reset the pcntEncoder position to zero
   void reset();
   void setPins(pcnt_unit_t unit, pcnt_channel_t channel, int pulse_io,
                int ctrl_io);
@@ -76,7 +76,7 @@ public:
   void eventEnable(uint threshholdValue);
   static void IRAM_ATTR pcntISR(void *arg);
 };
-void Encoder::begin() {
+void pcntEncoder::begin() {
   if (this->quadrature) {
     configureQuadrature(this->pin_a, this->pin_b, this->pcnt_unit);
   } else {
@@ -88,20 +88,20 @@ void Encoder::begin() {
   pcnt_counter_clear(pcnt_unit);
   pcnt_counter_resume(pcnt_unit);
 }
-void Encoder::setPins(pcnt_unit_t unit, pcnt_channel_t channel, int pulse_io,
-                      int ctrl_io) {
+void pcntEncoder::setPins(pcnt_unit_t unit, pcnt_channel_t channel,
+                          int pulse_io, int ctrl_io) {
 
   esp_err_t err = pcnt_set_pin(unit, channel, pulse_io, ctrl_io);
   if (err != ESP_OK) {
     Serial.println("Error configuring PCNT pins");
   }
 }
-int16_t Encoder::getPosition() {
+int16_t pcntEncoder::getPosition() {
   pcnt_get_counter_value(this->pcnt_unit, &(this->position));
-/* */  // Serial.println("position" + String(this->position));
+  /* */ // Serial.println("position" + String(this->position));
   return this->position;
 }
-int16_t Encoder::8getDifferential() {
+int16_t pcntEncoder::getDifferential() {
   if ((this->last_position > INT16_MAX >> 1) ||
       (this->last_position < INT16_MIN >> 1)) {
     this->reset();
@@ -111,14 +111,13 @@ int16_t Encoder::8getDifferential() {
   // Serial.println(String(this->getPosition() - this->last_position));
   return this->getPosition() - this->last_position;
 }
-void Encoder::reset() {
+void pcntEncoder::reset() {
   pcnt_counter_clear(this->pcnt_unit);
   this->position = 0;
   this->last_position = 0;
 }
 
-void Encoder::eventEnable(uint threshholdValue) {
-2
+void pcntEncoder::eventEnable(uint threshholdValue) {
   var1 = threshholdValue / INT16_MAX;
   Serial.println("var1 " + String(var1));
   var2 = threshholdValue % INT16_MAX;
@@ -132,8 +131,8 @@ void Encoder::eventEnable(uint threshholdValue) {
   pcnt_intr_enable(this->pcnt_unit);
   pcnt_counter_clear(this->pcnt_unit);
 }
-void IRAM_ATTR Encoder::pcntISR(void *arg) {
-  Encoder *encoder = static_cast<Encoder *>(arg);
+void IRAM_ATTR pcntEncoder::pcntISR(void *arg) {
+  pcntEncoder *encoder = static_cast<pcntEncoder *>(arg);
   // intrStatus = PCNT.int_st.val;
   pcnt_get_event_status(encoder->pcnt_unit, &intrStatus);
 
