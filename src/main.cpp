@@ -1,14 +1,14 @@
 #include "AiEsp32RotaryEncoder.h"
+#include "EspStepper.h"
 #include "GamepadDevice.h"
 #include "PCF8574.h"
 #include "USB.h"
 #include "USBHID.h"
+#include "defines.h"
+#include "dwin.h"
 #include "pcntEncoder.h"
-#include <EspStepper.h>
 #include <PubSubClient.h>
 #include <WiFi.h>
-#include <defines.h>
-#include <dwin.h>
 
 USBHIDGamepad Gamepad;
 
@@ -28,14 +28,13 @@ PCF8574 PCF5(0x24);
 
 pcntEncoder Mechanical_ENC1(PCNT_UNIT_1, Mechanical_ENC1_A, Mechanical_ENC1_B);
 pcntEncoder Mechanical_ENC2(PCNT_UNIT_0, Mechanical_ENC2_A, Mechanical_ENC2_B);
-// pcntEncoder DayScope_ENC2(PCNT_UNIT_3, DayScope_ENC1_A, DayScope_ENC1_B);
 pcntEncoder DayScope_ENC1(PCNT_UNIT_3, DayScope_ENC2_A, DayScope_ENC2_B);
-// pcntEncoder DayScope_ENC3(PCNT_UNIT_1, DayScope_ENC3_A, DayScope_ENC3_B);
 pcntEncoder NightScope_ENC1(PCNT_UNIT_2, NightScope_ENC1_A, NightScope_ENC1_B);
 
-AiEsp32RotaryEncoder rotaryEncoder =
-    AiEsp32RotaryEncoder(DayScope_ENC1_A, DayScope_ENC1_B, -1, -1,
-                         AIESP32ROTARYENCODER_DEFAULT_STEPS, false);
+AiEsp32RotaryEncoder DayScope_ENC2(DayScope_ENC1_A, DayScope_ENC1_B, -1, -1,
+                                   AIESP32ROTARYENCODER_DEFAULT_STEPS, false);
+AiEsp32RotaryEncoder DayScope_ENC3(DayScope_ENC3_A, DayScope_ENC3_B, -1, -1,
+                                   AIESP32ROTARYENCODER_DEFAULT_STEPS, false);
 
 bool encoderFlag = false;
 bool previousEncoderFlag = encoderFlag; // Store the previous state
@@ -43,23 +42,28 @@ bool previousEncoderFlag = encoderFlag; // Store the previous state
 void updateEncoders();
 void reconnect();
 void motorControlTask(void *pvParameters);
+void readTask(void *pvparameters);
 void setup_wifi();
 void callback(char *topic, byte *message, unsigned int length);
 
-void IRAM_ATTR readEncoderISR() { rotaryEncoder.readEncoder_ISR(); }
+void IRAM_ATTR readEncoderISR_2() { DayScope_ENC2.readEncoder_ISR(); }
+void IRAM_ATTR readEncoderISR_3() { DayScope_ENC3.readEncoder_ISR(); }
 
 void setup() {
   Serial.begin(115200);
   Wire.begin(SDA, SCL);
 
-  rotaryEncoder.areEncoderPinsPulldownforEsp32 = false;
-  rotaryEncoder.begin();
-  rotaryEncoder.setup(readEncoderISR);
-  rotaryEncoder.setBoundaries(
-      -999999, 999999,
-      false); // minValue, maxValue, circleValues true|false
-              // (when max go to min and vice versa)
-  rotaryEncoder.setAcceleration(1);
+  DayScope_ENC2.areEncoderPinsPulldownforEsp32 = false;
+  DayScope_ENC2.begin();
+  DayScope_ENC2.setup(readEncoderISR_2);
+  DayScope_ENC2.setBoundaries(-999999, 999999, false);
+  DayScope_ENC2.setAcceleration(1);
+
+  DayScope_ENC3.areEncoderPinsPulldownforEsp32 = false;
+  DayScope_ENC3.begin();
+  DayScope_ENC3.setup(readEncoderISR_3);
+  DayScope_ENC3.setBoundaries(-999999, 999999, false);
+  DayScope_ENC3.setAcceleration(1);
 
   pinMode(YAW_PIN, INPUT);
   pinMode(PITCH_PIN, INPUT);
@@ -81,37 +85,20 @@ void setup() {
   Mechanical_ENC1.begin();
   Mechanical_ENC2.begin();
   DayScope_ENC1.begin();
-  // DayScope_ENC2.begin();
-  // DayScope_ENC3.begin();
   NightScope_ENC1.begin();
 
-  dwinController.setNeedlePosition(550);
-  stepper.setRPMbyAcceleration(10);
+  dwinController.setNeedlePosition(0);
+  stepper.setRPMbyAcceleration(0);
 
   xTaskCreatePinnedToCore(motorControlTask, "MotorControl", 4096, NULL, 1, NULL,
                           1);
+  // xTaskCreatePinnedToCore(readTask, "readTask", 4096, NULL, 1, NULL, 1);
 
   USB.begin();
   Gamepad.begin();
 }
 
 void loop() {
-
-  // if (!client.connected()) {
-  //   reconnect();
-  // }
-  // client.loop();
-  dwinController.setNeedlePosition(TSM_Aux_value);
-
-  if (digitalRead(Pin_ALA)) {
-
-    stepper.begin();
-  }
-
-  // if (encoderFlag != previousEncoderFlag) {
-  //   updateEncoders();
-  //   previousEncoderFlag = encoderFlag; // Update the previous state
-  // }
 
   // Read Yaw (ADC channel 1)
   uint16_t result_adc1 = analogRead(YAW_PIN); // Read 12-bit ADC value (0-4095)
@@ -188,60 +175,52 @@ void loop() {
   if (debug) {
     Serial.print("Mechanical_1: ");
     Serial.println(Mechanical_1);
-    // Serial.print("NightScope: ");
-    // Serial.println(NightScope);
+    Serial.print("NightScope: ");
+    Serial.println(NightScope);
   }
 
-  // if (rotaryEncoder.encoderChanged()) {
-  //   Serial.println(rotaryEncoder.readEncoder());
-  // }
-  static int lastPosition;
-  int currentPosition = (rotaryEncoder.readEncoder());
-  uint8_t differential = currentPosition - lastPosition; // Calculate difference
-  lastPosition = currentPosition;
+  static int lastPosition_ENC2;
+  int currentPosition_ENC2 = (DayScope_ENC2.readEncoder());
+  int8_t DayScope_2 = currentPosition_ENC2 - lastPosition_ENC2;
+  lastPosition_ENC2 = currentPosition_ENC2;
+
+  static int lastPosition_ENC3;
+  int currentPosition_ENC3 = (DayScope_ENC3.readEncoder());
+  int8_t DayScope_3 = currentPosition_ENC3 - lastPosition_ENC3;
+  lastPosition_ENC3 = currentPosition_ENC3;
 
   if (debug) {
-    Serial.print("Differential: ");
-    Serial.println(differential);
+    Serial.print("DayScope_3: ");
+    Serial.println(DayScope_3);
   }
 
   // Send data to gamepad
   if (!Gamepad.send(Yaw_value, Pitch_value, Mechanical_1, Mechanical_2,
-                    DayScope_1, differential, 0, buttons)) {
+                    DayScope_1, DayScope_2, DayScope_3, 0, 0, buttons)) {
     Serial.println("Failed to send gamepad report.");
   }
 
   delay(10);
 }
 
-// Function to switch between encoder groups
-void updateEncoders() {
-  // Pause and clear counters
-  for (int unit = 0; unit < 4; unit++) {
-    pcnt_counter_pause((pcnt_unit_t)unit);
-    pcnt_counter_clear((pcnt_unit_t)unit);
+void readTask(void *pvparameters) {
+  for (;;) {
+    if (!client.connected()) {
+      reconnect();
+    }
+    client.loop();
+    dwinController.setNeedlePosition(TSM_Aux_value);
   }
+}
 
-  if (!encoderFlag) {
-    // First encoder group
-    Mechanical_ENC1.setPins(PCNT_UNIT_0, PCNT_CHANNEL_0, Mechanical_ENC1_A,
-                            Mechanical_ENC1_B);
-    Mechanical_ENC2.setPins(PCNT_UNIT_1, PCNT_CHANNEL_0, Mechanical_ENC2_A,
-                            Mechanical_ENC2_B);
-    DayScope_ENC1.setPins(PCNT_UNIT_2, PCNT_CHANNEL_0, DayScope_ENC1_A,
-                          DayScope_ENC1_B);
-    NightScope_ENC1.setPins(PCNT_UNIT_3, PCNT_CHANNEL_0, NightScope_ENC1_A,
-                            NightScope_ENC1_B);
-  } else {
-    // Second encoder group
-    DayScope_ENC1.setPins(PCNT_UNIT_0, PCNT_CHANNEL_0, DayScope_ENC1_A,
-                          DayScope_ENC1_B);
-    // DayScope_ENC2.setPins(PCNT_UNIT_1, PCNT_CHANNEL_0, DayScope_ENC2_A,
-    //                       DayScope_ENC2_B);
-    // DayScope_ENC3.setPins(PCNT_UNIT_2, PCNT_CHANNEL_0, DayScope_ENC3_A,
-    //                       DayScope_ENC3_B);
-    NightScope_ENC1.setPins(PCNT_UNIT_3, PCNT_CHANNEL_0, NightScope_ENC1_A,
-                            NightScope_ENC1_B);
+void motorControlTask(void *pvParameters) {
+
+  for (;;) {
+    if (digitalRead(Pin_ALA)) {
+      stepper.begin();
+    }
+    stepper.setRPMbyAcceleration(TSM_motor_value);
+    vTaskDelay(30);
   }
 }
 
@@ -259,14 +238,6 @@ void reconnect() {
       Serial.println(" try again in 5 seconds");
       delay(5000);
     }
-  }
-}
-
-void motorControlTask(void *pvParameters) {
-
-  for (;;) {
-    stepper.setRPMbyAcceleration(TSM_motor_value);
-    vTaskDelay(30);
   }
 }
 
@@ -331,5 +302,36 @@ void callback(char *topic, byte *message, unsigned int length) {
         Serial.println("Invalid encoder flag value received.");
       }
     }
+  }
+}
+
+// Function to switch between encoder groups
+void updateEncoders() {
+  // Pause and clear counters
+  for (int unit = 0; unit < 4; unit++) {
+    pcnt_counter_pause((pcnt_unit_t)unit);
+    pcnt_counter_clear((pcnt_unit_t)unit);
+  }
+
+  if (!encoderFlag) {
+    // First encoder group
+    Mechanical_ENC1.setPins(PCNT_UNIT_0, PCNT_CHANNEL_0, Mechanical_ENC1_A,
+                            Mechanical_ENC1_B);
+    Mechanical_ENC2.setPins(PCNT_UNIT_1, PCNT_CHANNEL_0, Mechanical_ENC2_A,
+                            Mechanical_ENC2_B);
+    DayScope_ENC1.setPins(PCNT_UNIT_2, PCNT_CHANNEL_0, DayScope_ENC1_A,
+                          DayScope_ENC1_B);
+    NightScope_ENC1.setPins(PCNT_UNIT_3, PCNT_CHANNEL_0, NightScope_ENC1_A,
+                            NightScope_ENC1_B);
+  } else {
+    // Second encoder group
+    DayScope_ENC1.setPins(PCNT_UNIT_0, PCNT_CHANNEL_0, DayScope_ENC1_A,
+                          DayScope_ENC1_B);
+    // DayScope_ENC2.setPins(PCNT_UNIT_1, PCNT_CHANNEL_0, DayScope_ENC2_A,
+    //                       DayScope_ENC2_B);
+    // DayScope_ENC3.setPins(PCNT_UNIT_2, PCNT_CHANNEL_0, DayScope_ENC3_A,
+    //                       DayScope_ENC3_B);
+    NightScope_ENC1.setPins(PCNT_UNIT_3, PCNT_CHANNEL_0, NightScope_ENC1_A,
+                            NightScope_ENC1_B);
   }
 }
