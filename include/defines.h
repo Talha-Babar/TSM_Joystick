@@ -6,8 +6,8 @@
 #define NOISE_THRESHOLD 2
 #define MAX_DELTA 1000
 
-#define Axes_Min -1
-#define Axes_Max 1
+#define Axes_Min -127
+#define Axes_Max 128
 
 #define SCL 21
 #define SDA 47
@@ -49,10 +49,15 @@
 #define GEARRATIO 1
 #define HOME_DIR true
 
-#define Pin_PUL 7
-#define Pin_DIR 6
-#define Pin_ENA 5
-#define Pin_ALA 4
+// #define Pin_PUL 7
+// #define Pin_DIR 6
+// #define Pin_ENA 5
+// #define Pin_ALA 4
+
+#define Pin_PUL 4
+#define Pin_DIR 5
+#define Pin_ENA 6
+#define Pin_ALA 7
 
 #define LEDC_CHAN_STP 2
 

@@ -96,6 +96,12 @@ void EspStepper::setRPM(int rpm) {
 void EspStepper::setRPMbyAcceleration(int RPM) {
   setMode(MotorMode::VELOCITY);
 
+  if (RPM > 35) {
+    RPM = 35;
+  } else if (RPM < -30) {
+    RPM = -30;
+  }
+
   int rpm = map(RPM, 0, 100, 0, 1900);
 
   float maxRPMChangePerInterval = 25;

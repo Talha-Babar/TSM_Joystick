@@ -45,6 +45,7 @@ void motorControlTask(void *pvParameters);
 void readTask(void *pvparameters);
 void setup_wifi();
 void callback(char *topic, byte *message, unsigned int length);
+int8_t limit(int value, int min, int max);
 
 void IRAM_ATTR readEncoderISR_2() { DayScope_ENC2.readEncoder_ISR(); }
 void IRAM_ATTR readEncoderISR_3() { DayScope_ENC3.readEncoder_ISR(); }
@@ -74,13 +75,15 @@ void setup() {
   PCF4.begin();
   PCF5.begin();
   dwinController.begin();
+  stepper.begin();
 
   dwinController.setNeedlePosition(800);
-  stepper.begin();
-  // setup_wifi();
-  // client.setServer(mqtt_server, mqtt_port);
-  // client.setCallback(callback);
-  vTaskDelay(1000);
+  stepper.setRPMbyAcceleration(60);
+
+  setup_wifi();
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(callback);
+  vTaskDelay(5000);
 
   Mechanical_ENC1.begin();
   Mechanical_ENC2.begin();
@@ -92,7 +95,7 @@ void setup() {
 
   xTaskCreatePinnedToCore(motorControlTask, "MotorControl", 4096, NULL, 1, NULL,
                           1);
-  // xTaskCreatePinnedToCore(readTask, "readTask", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(readTask, "readTask", 4096, NULL, 1, NULL, 1);
 
   USB.begin();
   Gamepad.begin();
@@ -131,11 +134,11 @@ void loop() {
   uint8_t Temp_Mechanical = 0;
   uint8_t Temp_Electrical = 0;
   // Read GPIO values from the IO expanders and invert bits
-  // Temp_DayNight = ~PCF1.readGPIO();
-  // Temp_SmokeGernade_1 = ~PCF2.readGPIO();
-  // Temp_SmokeGernade_2 = ~PCF3.readGPIO();
-  // Temp_Mechanical = ~PCF4.readGPIO();
-  // Temp_Electrical = ~PCF5.readGPIO();
+  Temp_DayNight = ~PCF1.readGPIO();
+  Temp_SmokeGernade_1 = ~PCF2.readGPIO();
+  Temp_SmokeGernade_2 = ~PCF3.readGPIO();
+  Temp_Mechanical = ~PCF4.readGPIO();
+  Temp_Electrical = ~PCF5.readGPIO();
 
   if (debug) {
     Serial.print("Temp_Mechanical: ");
@@ -168,9 +171,13 @@ void loop() {
 
   // Read first set of encoders
   int8_t Mechanical_1 = Mechanical_ENC1.getDifferential();
+  Mechanical_1 = limit(Mechanical_1, Axes_Min, Axes_Max);
   int8_t Mechanical_2 = Mechanical_ENC2.getDifferential();
+  Mechanical_2 = limit(Mechanical_2, Axes_Min, Axes_Max);
   int8_t DayScope_1 = DayScope_ENC1.getDifferential();
+  DayScope_1 = limit(DayScope_1, Axes_Min, Axes_Max);
   int8_t NightScope = NightScope_ENC1.getDifferential();
+  NightScope = limit(NightScope, Axes_Min, Axes_Max);
 
   if (debug) {
     Serial.print("Mechanical_1: ");
@@ -305,33 +312,16 @@ void callback(char *topic, byte *message, unsigned int length) {
   }
 }
 
-// Function to switch between encoder groups
-void updateEncoders() {
-  // Pause and clear counters
-  for (int unit = 0; unit < 4; unit++) {
-    pcnt_counter_pause((pcnt_unit_t)unit);
-    pcnt_counter_clear((pcnt_unit_t)unit);
+int8_t limit(int value, int min, int max) {
+  // Limit the value first
+  if (value > max) {
+    value = max;
+
+  } else if (value < min) {
+    value = min;
   }
 
-  if (!encoderFlag) {
-    // First encoder group
-    Mechanical_ENC1.setPins(PCNT_UNIT_0, PCNT_CHANNEL_0, Mechanical_ENC1_A,
-                            Mechanical_ENC1_B);
-    Mechanical_ENC2.setPins(PCNT_UNIT_1, PCNT_CHANNEL_0, Mechanical_ENC2_A,
-                            Mechanical_ENC2_B);
-    DayScope_ENC1.setPins(PCNT_UNIT_2, PCNT_CHANNEL_0, DayScope_ENC1_A,
-                          DayScope_ENC1_B);
-    NightScope_ENC1.setPins(PCNT_UNIT_3, PCNT_CHANNEL_0, NightScope_ENC1_A,
-                            NightScope_ENC1_B);
-  } else {
-    // Second encoder group
-    DayScope_ENC1.setPins(PCNT_UNIT_0, PCNT_CHANNEL_0, DayScope_ENC1_A,
-                          DayScope_ENC1_B);
-    // DayScope_ENC2.setPins(PCNT_UNIT_1, PCNT_CHANNEL_0, DayScope_ENC2_A,
-    //                       DayScope_ENC2_B);
-    // DayScope_ENC3.setPins(PCNT_UNIT_2, PCNT_CHANNEL_0, DayScope_ENC3_A,
-    //                       DayScope_ENC3_B);
-    NightScope_ENC1.setPins(PCNT_UNIT_3, PCNT_CHANNEL_0, NightScope_ENC1_A,
-                            NightScope_ENC1_B);
-  }
+  int8_t mapped_value = (int8_t)(((value - min) * 255 / (max - min)) - 128);
+
+  return value;
 }
