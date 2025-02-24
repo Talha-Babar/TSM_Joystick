@@ -24,7 +24,7 @@ PCF8574 PCF1(0x20);
 PCF8574 PCF2(0x21);
 PCF8574 PCF3(0x22);
 PCF8574 PCF4(0x23);
-PCF8574 PCF5(0x24);
+PCF8574 PCF5(0x25);
 
 pcntEncoder Mechanical_ENC1(PCNT_UNIT_1, Mechanical_ENC1_A, Mechanical_ENC1_B);
 pcntEncoder Mechanical_ENC2(PCNT_UNIT_0, Mechanical_ENC2_A, Mechanical_ENC2_B);
@@ -53,6 +53,7 @@ void IRAM_ATTR readEncoderISR_3() { DayScope_ENC3.readEncoder_ISR(); }
 void setup() {
   Serial.begin(115200);
   Wire.begin(SDA, SCL);
+  Wire.setClock(100000);
 
   DayScope_ENC2.areEncoderPinsPulldownforEsp32 = false;
   DayScope_ENC2.begin();
@@ -77,8 +78,8 @@ void setup() {
   dwinController.begin();
   stepper.begin();
 
-  dwinController.setNeedlePosition(800);
-  stepper.setRPMbyAcceleration(60);
+  // dwinController.setNeedlePosition(800);
+  // stepper.setRPMbyAcceleration(60);
 
   setup_wifi();
   client.setServer(mqtt_server, mqtt_port);
@@ -141,17 +142,17 @@ void loop() {
   Temp_Electrical = ~PCF5.readGPIO();
 
   if (debug) {
-    Serial.print("Temp_Mechanical: ");
-    Serial.println(Temp_Mechanical, BIN);
+    Serial.print("Temp_DayNight: ");
+    Serial.println(Temp_DayNight, BIN);
     Serial.print("Temp_Electrical: ");
     Serial.println(Temp_Electrical, BIN);
   }
 
   // Remove the 0th bit from Temp_Mechanical
-  Temp_Mechanical &= ~0x01; // Mask out bit 0 (keep bits 1-7)
+  // Temp_Mechanical &= ~0x01; // Mask out bit 0 (keep bits 1-7)
 
   // Remove the 5th bit from Temp_Electrical while keeping the rest
-  Temp_Electrical &= ~0x20; // Mask out bit 5 (keep bits 0-4, 6-7)
+  // Temp_Electrical &= ~0x20; // Mask out bit 5 (keep bits 0-4, 6-7)
 
   // Shift and store into a single 32-bit variable
   buttons = 0; // Ensure buttons starts empty
@@ -162,9 +163,34 @@ void loop() {
   buttons |= ((Temp_Mechanical >> 1) << 18);
   buttons |=
       (((Temp_Electrical & 0x0F) | ((Temp_Electrical & 0xF0) >> 1)) << 25);
+      PCF4.writePin(0, bitRead(buttons,28));
+      // delay(10);
+      // PCF5.writePin(0, bitRead(buttons,31));
+      // if(bitRead(buttons,28)){  //K1
+      //   PCF4.writePin(0, true) ;//Red LED
+      // }else{
+      //   PCF4.writePin(0, false) ;//Red LED
+      // }
+
+      // if(bitRead(buttons,31)){// Firing MG
+      //   PCF5.writePin(5, false) ;//Green LED
+      // }else{
+      //   PCF5.writePin(5, true) ;//Green LED
+      // }
+
+    // Serial.println(Temp_Electrical & (1 << 4));
+    // Serial.println(Temp_Mechanical & (1 << 1));
+
+
+      // PCF5.writePin(0, 1) ;//Green LED
+      // PCF4.writePin(0, false) ;//Red LED
+
+
+      
+     
 
   // Debugging Output
-  if (debug) {
+  if (1) {
     Serial.print("Buttons: ");
     Serial.println(buttons, BIN);
   }
@@ -203,7 +229,7 @@ void loop() {
 
   // Send data to gamepad
   if (!Gamepad.send(Yaw_value, Pitch_value, Mechanical_1, Mechanical_2,
-                    DayScope_1, DayScope_2, DayScope_3, 0, 0, buttons)) {
+                    DayScope_1, DayScope_2, DayScope_3, NightScope, 0, buttons)) {
     Serial.println("Failed to send gamepad report.");
   }
 

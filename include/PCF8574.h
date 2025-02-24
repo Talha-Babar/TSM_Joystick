@@ -15,7 +15,7 @@ public:
 
   // Initializes communication and sets all pins as inputs with pull-ups
   void begin() {
-    Wire.begin();
+    // Wire.begin();
     gpioState = 0xFF; // Default all pins HIGH (pull-up enabled)
     Wire.beginTransmission(address);
     Wire.write(gpioState);
@@ -35,7 +35,8 @@ public:
   bool readPin(uint8_t pin) {
     if (pin > 7)
       return false; // Invalid pin number
-    return (gpioState & (1 << pin)) != 0;
+    // return (gpioState & (1 << pin)) != 0;
+    return bitRead(gpioState,pin);
   }
 
   // Writes a new GPIO state to the PCF8574
@@ -51,11 +52,13 @@ public:
     if (pin > 7)
       return; // Invalid pin number
 
-    if (state) {
-      gpioState |= (1 << pin); // Set pin HIGH
-    } else {
-      gpioState &= ~(1 << pin); // Set pin LOW
-    }
+    bitWrite(gpioState,pin,state);
+
+    // if (state) {
+    //   gpioState |= (1 << pin); // Set pin HIGH
+    // } else {
+    //   gpioState &= ~(1 << pin); // Set pin LOW
+    // }
 
     // Send updated state to PCF8574
     Wire.beginTransmission(address);

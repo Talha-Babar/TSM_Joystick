@@ -11,7 +11,7 @@
 
 #define SCL 21
 #define SDA 47
-#define I2C_Frequency
+#define I2C_Frequency 
 
 // Electrical Joystick Button Pins
 
