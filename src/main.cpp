@@ -81,10 +81,10 @@ void setup() {
   // dwinController.setNeedlePosition(800);
   // stepper.setRPMbyAcceleration(60);
 
-  setup_wifi();
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
-  vTaskDelay(5000);
+  // setup_wifi();
+  // client.setServer(mqtt_server, mqtt_port);
+  // client.setCallback(callback);
+  // vTaskDelay(5000);
 
   Mechanical_ENC1.begin();
   Mechanical_ENC2.begin();
@@ -94,9 +94,10 @@ void setup() {
   dwinController.setNeedlePosition(0);
   stepper.setRPMbyAcceleration(0);
 
-  xTaskCreatePinnedToCore(motorControlTask, "MotorControl", 4096, NULL, 1, NULL,
-                          1);
-  xTaskCreatePinnedToCore(readTask, "readTask", 4096, NULL, 1, NULL, 1);
+  // xTaskCreatePinnedToCore(motorControlTask, "MotorControl", 4096, NULL, 1,
+  // NULL,
+  //                         1);
+  // xTaskCreatePinnedToCore(readTask, "readTask", 4096, NULL, 1, NULL, 1);
 
   USB.begin();
   Gamepad.begin();
@@ -161,33 +162,27 @@ void loop() {
   buttons |= (Temp_SmokeGernade_1 << 8);    // Bits 8-9 (2 bits)
   buttons |= ((Temp_SmokeGernade_2) << 10); // Bits 10-17 (8 bits)
   buttons |= ((Temp_Mechanical >> 1) << 18);
-  buttons |=
-      (((Temp_Electrical & 0x0F) | ((Temp_Electrical & 0xF0) >> 1)) << 25);
-      PCF4.writePin(0, bitRead(buttons,28));
-      // delay(10);
-      // PCF5.writePin(0, bitRead(buttons,31));
-      // if(bitRead(buttons,28)){  //K1
-      //   PCF4.writePin(0, true) ;//Red LED
-      // }else{
-      //   PCF4.writePin(0, false) ;//Red LED
-      // }
+  buttons |= (((Temp_Electrical & 0x1F) | ((Temp_Electrical >> 6) << 5)) << 25);
+  PCF4.writePin(0, bitRead(buttons, 28));
+  // // delay(10);
+  PCF5.writePin(5, bitRead(buttons, 31));
+  // if(bitRead(buttons,28)){  //K1
+  //   PCF4.writePin(0, true) ;//Red LED
+  // }else{
+  //   PCF4.writePin(0, false) ;//Red LED
+  // }
 
-      // if(bitRead(buttons,31)){// Firing MG
-      //   PCF5.writePin(5, false) ;//Green LED
-      // }else{
-      //   PCF5.writePin(5, true) ;//Green LED
-      // }
+  // if(bitRead(buttons,31)){// Firing MG
+  //   PCF5.writePin(5, false) ;//Green LED
+  // }else{
+  //   PCF5.writePin(5, true) ;//Green LED
+  // }
 
-    // Serial.println(Temp_Electrical & (1 << 4));
-    // Serial.println(Temp_Mechanical & (1 << 1));
+  // Serial.println(Temp_Electrical & (1 << 4));
+  // Serial.println(Temp_Mechanical & (1 << 1));
 
-
-      // PCF5.writePin(0, 1) ;//Green LED
-      // PCF4.writePin(0, false) ;//Red LED
-
-
-      
-     
+  // PCF5.writePin(0, 1) ;//Green LED
+  // PCF4.writePin(0, false) ;//Red LED
 
   // Debugging Output
   if (1) {
@@ -229,7 +224,8 @@ void loop() {
 
   // Send data to gamepad
   if (!Gamepad.send(Yaw_value, Pitch_value, Mechanical_1, Mechanical_2,
-                    DayScope_1, DayScope_2, DayScope_3, NightScope, 0, buttons)) {
+                    DayScope_1, DayScope_2, DayScope_3, NightScope, 0,
+                    buttons)) {
     Serial.println("Failed to send gamepad report.");
   }
 
