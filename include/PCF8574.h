@@ -52,6 +52,7 @@ public:
     if (pin > 7)
       return; // Invalid pin number
 
+    gpioState=0xFF;
     bitWrite(gpioState,pin,state);
 
     // if (state) {

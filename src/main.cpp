@@ -142,9 +142,9 @@ void loop() {
   Temp_Mechanical = ~PCF4.readGPIO();
   Temp_Electrical = ~PCF5.readGPIO();
 
-  if (debug) {
-    Serial.print("Temp_DayNight: ");
-    Serial.println(Temp_DayNight, BIN);
+  if (1) {
+    // Serial.print("Temp_DayNight: ");
+    // Serial.println(Temp_DayNight, BIN);
     Serial.print("Temp_Electrical: ");
     Serial.println(Temp_Electrical, BIN);
   }
@@ -155,17 +155,17 @@ void loop() {
   // Remove the 5th bit from Temp_Electrical while keeping the rest
   // Temp_Electrical &= ~0x20; // Mask out bit 5 (keep bits 0-4, 6-7)
 
-  // Shift and store into a single 32-bit variable
-  buttons = 0; // Ensure buttons starts empty
+
 
   buttons |= Temp_DayNight;                 // Bits 0-7 (8 bits)
   buttons |= (Temp_SmokeGernade_1 << 8);    // Bits 8-9 (2 bits)
   buttons |= ((Temp_SmokeGernade_2) << 10); // Bits 10-17 (8 bits)
   buttons |= ((Temp_Mechanical >> 1) << 18);
   buttons |= (((Temp_Electrical & 0x1F) | ((Temp_Electrical >> 6) << 5)) << 25);
-  PCF4.writePin(0, bitRead(buttons, 28));
-  // // delay(10);
-  PCF5.writePin(5, bitRead(buttons, 31));
+  PCF4.writePin(0, bitRead(buttons, 31)); // K1 turn on Red LED
+  // delay(10);
+  PCF5.writePin(5, bitRead(buttons, 29)); // Firing MG turn on Green LED
+  // PCF5.writePin(5, 1); // Firing MG turn on Green LED
   // if(bitRead(buttons,28)){  //K1
   //   PCF4.writePin(0, true) ;//Red LED
   // }else{
@@ -185,7 +185,7 @@ void loop() {
   // PCF4.writePin(0, false) ;//Red LED
 
   // Debugging Output
-  if (1) {
+  if (debug) {
     Serial.print("Buttons: ");
     Serial.println(buttons, BIN);
   }
